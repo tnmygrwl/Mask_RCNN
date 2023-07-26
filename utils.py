@@ -64,8 +64,7 @@ def compute_iou(box, boxes, box_area, boxes_area):
     x2 = np.minimum(box[3], boxes[:, 3])
     intersection = np.maximum(x2 - x1, 0) * np.maximum(y2 - y1, 0)
     union = box_area + boxes_area[:] - intersection[:]
-    iou = intersection / union
-    return iou
+    return intersection / union
 
 
 def compute_overlaps(boxes1, boxes2):
@@ -170,8 +169,7 @@ def box_refinement_graph(box, gt_box):
     dh = tf.log(gt_height / height)
     dw = tf.log(gt_width / width)
 
-    result = tf.stack([dy, dx, dh, dw], axis=1)
-    return result
+    return tf.stack([dy, dx, dh, dw], axis=1)
 
 
 def box_refinement(box, gt_box):
@@ -245,8 +243,7 @@ class Dataset(object):
             "id": image_id,
             "source": source,
             "path": path,
-        }
-        image_info.update(kwargs)
+        } | kwargs
         self.image_info.append(image_info)
 
     def image_reference(self, image_id):
@@ -279,7 +276,7 @@ class Dataset(object):
                                       for info, id in zip(self.class_info, self.class_ids)}
 
         # Map sources to class_ids they support
-        self.sources = list(set([i['source'] for i in self.class_info]))
+        self.sources = list({i['source'] for i in self.class_info})
         self.source_class_ids = {}
         # Loop over datasets
         for source in self.sources:
@@ -310,10 +307,10 @@ class Dataset(object):
             for ds, id in c["map"]:
                 self.external_to_class_id[ds + str(id)] = i
 
-        # Map external image IDs to internal ones.
-        self.external_to_image_id = {}
-        for i, info in enumerate(self.image_info):
-            self.external_to_image_id[info["ds"] + str(info["id"])] = i
+        self.external_to_image_id = {
+            info["ds"] + str(info["id"]): i
+            for i, info in enumerate(self.image_info)
+        }
 
     @property
     def image_ids(self):
@@ -377,12 +374,7 @@ def resize_image(image, min_dim=None, max_dim=None, padding=False):
     # Default window (y1, x1, y2, x2) and default scale == 1.
     h, w = image.shape[:2]
     window = (0, 0, h, w)
-    scale = 1
-
-    # Scale?
-    if min_dim:
-        # Scale up but not down
-        scale = max(1, min_dim / min(h, w))
+    scale = max(1, min_dim / min(h, w)) if min_dim else 1
     # Does it exceed max dim?
     if max_dim:
         image_max = max(h, w)
@@ -516,10 +508,9 @@ def generate_anchors(scales, ratios, shape, feature_stride, anchor_stride):
         [box_centers_y, box_centers_x], axis=2).reshape([-1, 2])
     box_sizes = np.stack([box_heights, box_widths], axis=2).reshape([-1, 2])
 
-    # Convert to corner coordinates (y1, x1, y2, x2)
-    boxes = np.concatenate([box_centers - 0.5 * box_sizes,
-                            box_centers + 0.5 * box_sizes], axis=1)
-    return boxes
+    return np.concatenate(
+        [box_centers - 0.5 * box_sizes, box_centers + 0.5 * box_sizes], axis=1
+    )
 
 
 def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
@@ -533,12 +524,16 @@ def generate_pyramid_anchors(scales, ratios, feature_shapes, feature_strides,
         with the same order of the given scales. So, anchors of scale[0] come
         first, then anchors of scale[1], and so on.
     """
-    # Anchors
-    # [anchor_count, (y1, x1, y2, x2)]
-    anchors = []
-    for i in range(len(scales)):
-        anchors.append(generate_anchors(scales[i], ratios, feature_shapes[i],
-                                        feature_strides[i], anchor_stride))
+    anchors = [
+        generate_anchors(
+            scales[i],
+            ratios,
+            feature_shapes[i],
+            feature_strides[i],
+            anchor_stride,
+        )
+        for i in range(len(scales))
+    ]
     return np.concatenate(anchors, axis=0)
 
 

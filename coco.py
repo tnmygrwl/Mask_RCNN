@@ -160,9 +160,9 @@ class CocoDataset(utils.Dataset):
         # Build mask of shape [height, width, instance_count] and list
         # of class IDs that correspond to each channel of the mask.
         for annotation in annotations:
-            class_id = self.map_source_class_id(
-                "coco.{}".format(annotation['category_id']))
-            if class_id:
+            if class_id := self.map_source_class_id(
+                f"coco.{annotation['category_id']}"
+            ):
                 m = self.annToMask(annotation, image_info["height"],
                                    image_info["width"])
                 # Some objects are so small that they're less than 1 pixel area
@@ -172,20 +172,18 @@ class CocoDataset(utils.Dataset):
                 instance_masks.append(m)
                 class_ids.append(class_id)
 
-        # Pack instance masks into an array
-        if class_ids:
-            mask = np.stack(instance_masks, axis=2)
-            class_ids = np.array(class_ids, dtype=np.int32)
-            return mask, class_ids
-        else:
+        if not class_ids:
             # Call super class to return an empty mask
             return super(self.__class__).load_mask(image_id)
+        mask = np.stack(instance_masks, axis=2)
+        class_ids = np.array(class_ids, dtype=np.int32)
+        return mask, class_ids
 
     def image_reference(self, image_id):
         """Return a link to the image in the COCO Website."""
         info = self.image_info[image_id]
         if info["source"] == "coco":
-            return "http://cocodataset.org/#explore?id={}".format(info["id"])
+            return f'http://cocodataset.org/#explore?id={info["id"]}'
         else:
             super(self.__class__).image_reference(self, image_id)
 
@@ -201,14 +199,12 @@ class CocoDataset(utils.Dataset):
             # polygon -- a single object might consist of multiple parts
             # we merge all parts into one mask rle code
             rles = maskUtils.frPyObjects(segm, height, width)
-            rle = maskUtils.merge(rles)
+            return maskUtils.merge(rles)
         elif isinstance(segm['counts'], list):
             # uncompressed RLE
-            rle = maskUtils.frPyObjects(segm, height, width)
+            return maskUtils.frPyObjects(segm, height, width)
         else:
-            # rle
-            rle = ann['segmentation']
-        return rle
+            return segm
 
     def annToMask(self, ann, height, width):
         """
@@ -216,8 +212,7 @@ class CocoDataset(utils.Dataset):
         :return: binary mask (numpy 2D array)
         """
         rle = self.annToRLE(ann, height, width)
-        m = maskUtils.decode(rle)
-        return m
+        return maskUtils.decode(rle)
 
 
 ############################################################
@@ -296,8 +291,9 @@ def evaluate_coco(dataset, coco, eval_type="bbox", limit=0):
     cocoEval.accumulate()
     cocoEval.summarize()
 
-    print("Prediction time: {}. Average {}/image".format(
-        t_prediction, t_prediction/len(image_ids)))
+    print(
+        f"Prediction time: {t_prediction}. Average {t_prediction / len(image_ids)}/image"
+    )
     print("Total time: ", time.time() - t_start)
 
 
@@ -411,5 +407,4 @@ if __name__ == '__main__':
         # TODO: evaluating on 500 images. Set to 0 to evaluate on all images.
         evaluate_coco(dataset_val, coco, "bbox", limit=500)
     else:
-        print("'{}' is not recognized. "
-              "Use 'train' or 'evaluate'".format(args.command))
+        print(f"'{args.command}' is not recognized. Use 'train' or 'evaluate'")

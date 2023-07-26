@@ -148,7 +148,7 @@ class ShapesDataset(utils.Dataset):
         # Shape
         shape = random.choice(["square", "circle", "triangle"])
         # Color
-        color = tuple([random.randint(0, 255) for _ in range(3)])
+        color = tuple(random.randint(0, 255) for _ in range(3))
         # Center x, y
         buffer = 20
         y = random.randint(buffer, height - buffer - 1)
